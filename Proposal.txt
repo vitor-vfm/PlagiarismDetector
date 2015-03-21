@@ -1,0 +1,50 @@
+CMPUT 275 FINAL PROJECT
+
+Plagiarism detector
+
+Vitor Mendonca
+Pavlo Malynin
+
+This project is a detector of plagiarism on text documents. The program
+should receive as input a directory, analize all txt documents inside and
+determine which documents are likely to be plagiarized from one another.
+It's based on an assignment given on the CS2 course at Stanford, described
+here: http://nifty.stanford.edu/2008/franke-catch-plagiarists/
+
+The basic idea behind the program is to read the .txt files and generate a
+graph where each node is a document, each edge represents commonality between
+documents (by commonality, we mean sentences or word sentences common to both
+docs), and each edge weight is the number of n-word sequences in common
+between the documents. We can then output the pairs to the user in order of commonality. 
+Finding sequences in common will demand dynamic programming to be run
+efficiently.
+
+The program should be run from the command line, taking as inputs the
+threshold (number of sequences in common that would qualify a pair of
+documents as plagiarized), the sequence size n, and a directory. E.g.:
+
+$ pldetect 20 4 ./reports
+
+The program will output a list of pairs of documents, in order of probability
+of being plagiarized. The user can also add the -v flag to obtain more specific information.
+
+Demo
+
+We will use the document database provided by the Stanford assignmet to obtain
+a result live at demo time. In addition, we will ask the examiners to give us a
+random topic, then we will obtain a couple of articles on that topic online
+and generate a plagiarized document live to show that our program can detect it.
+
+Milestones
+
+March 23 - Implement basic functionality; program should read a directory
+and return an output. At this point, program simply finds sentences (i.e., 
+strings separated by punctuation) that are common among 2 or more documents.
+
+March 30 - Improve the algorithm to find not only sentences, but also n-word
+sequences, where n is determined by user. 
+
+April 06 - Implement a synonym dictionary, so that sentences like "the file
+was found" and "the file was located" are considered similar
+
+April 10 - Tweak and make minor improvements to user interface
