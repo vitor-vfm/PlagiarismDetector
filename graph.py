@@ -5,21 +5,24 @@ class Graph:
     """
     Directed Graph Class
     Created by UofAlberta CMPUT 275 instructors
+    Changed to have weighted edges
     
     A graph is modelled as a dictionary that maps a vertex
     to the list of neighbours of that vertex.
+
+    There is a dictionary that maps edges to their weights
     
     From the Jan 22/23 lectures.
     """
 
-    def __init__(self, vertices = set(), edges = list()):
+    def __init__(self, vertices = set(), edges = list(), weights = list()):
         """
         Construct a graph with a shallow copy of
         the given set of vertices and given list of edges.
 
         Efficiency: O(# vertices + # edges)
 
-        >>> g = Graph({1,2,3}, [(1,2), (2,3)])
+        >>> g = Graph({1,2,3}, [(1,2), (2,3)], [3,4])
         >>> g._alist.keys() == {1,2,3}
         True
         >>> g._alist[1] == [2]
@@ -36,11 +39,12 @@ class Graph:
         """
 
         self._alist = dict()
+        self._edges = dict()
 
         for v in vertices:
             self.add_vertex(v)
-        for e in edges:
-            self.add_edge(e)
+        for i, e in enumerate(edges):
+            self.add_edge(e, weights[i])
 
     def add_vertex(self, v):
         """
@@ -58,7 +62,7 @@ class Graph:
         True
         >>> 2 in g._alist
         False
-        >>> h = Graph({1,2}, [(1,2)])
+        >>> h = Graph({1,2}, [(1,2)], [3])
         >>> h.add_vertex(1)
         >>> h._alist[1] == [2]
         True
@@ -67,7 +71,7 @@ class Graph:
         if v not in self._alist:
             self._alist[v] = list()
 
-    def add_edge(self, e):
+    def add_edge(self, e, w):
         """
         Add edge e to the graph.
         Raise an exception if the endpoints of
@@ -78,12 +82,12 @@ class Graph:
         >>> g = Graph()
         >>> g.add_vertex(1)
         >>> g.add_vertex(2)
-        >>> g.add_edge((1,2))
+        >>> g.add_edge((1,2), 3)
         >>> 2 in g._alist[1]
         True
         >>> 1 in g._alist[2]
         False
-        >>> g.add_edge((1,2))
+        >>> g.add_edge((1,2), 4)
         >>> g._alist[1] == [2,2]
         True
         """
@@ -93,6 +97,7 @@ class Graph:
             raise ValueError("an endpoint is not in graph")
 
         self._alist[e[0]].append(e[1])
+        self._edges[e] = w
 
     def is_vertex(self, v):
         """
@@ -120,12 +125,12 @@ class Graph:
 
         Efficiency: O(# neighbours of e[0])
 
-        >>> g = Graph({1,2}, [(1,2)])
+        >>> g = Graph({1,2}, [(1,2)], [5])
         >>> g.is_edge((1,2))
         True
         >>> g.is_edge((2,1))
         False
-        >>> g.add_edge((1,2))
+        >>> g.add_edge((1,2), 5)
         >>> g.is_edge((1,2))
         True
         """
@@ -147,7 +152,8 @@ class Graph:
         Efficiency: O(1)
 
         >>> Edges = [(1,2),(1,4),(3,1),(3,4),(2,4),(1,2)]
-        >>> g = Graph({1,2,3,4}, Edges)
+        >>> Weights = [2,4,5,1,2,3]
+        >>> g = Graph({1,2,3,4}, Edges, Weights)
         >>> g.neighbours(1)
         [2, 4, 2]
         >>> g.neighbours(4)
@@ -183,28 +189,22 @@ class Graph:
 
     def edges(self):
         """
-        Returns a list of tuples (u,v) corresponding to
-        edges in the graph. Multiple copies of an edge in the graph
-        appear in the returned list just as many times.
-
-        Efficiency: O((# vertices) + (# edges))
-
-        >>> g = Graph({1,2,3},[(1,2),(2,3),(1,3)])
-        >>> set(g.edges()) == {(1,2),(2,3),(1,3)}
-        True
-        >>> g.add_edge((3,1))
-        >>> set(g.edges()) == {(1,2),(2,3),(1,3),(3,1)}
-        True
-        >>> h = Graph({1,2},[(1,2),(1,2)])
-        >>> h.edges() == [(1,2),(1,2)]
-        True
+        Returns the edges dictionary
         """
+        return self._edges
 
-        # iterates over tuples (v,nbrs) where v is a key and nbrs = _alist[v]
-        e = []
-        for v,nbrs in self._alist.items():
-            e.extend([(v,u) for u in nbrs])
-        return e
+    def get_edge_weight(self, e):
+        """
+        >>> g = Graph({1,2})
+        >>> g.add_edge((1,2), 4)
+        >>> g.get_edge_weight((1,2))
+        4
+        """
+        return self._edges[e]
 
 
 #END OF CLASS DEFINITION
+
+if __name__=="__main__":
+    import doctest
+    doctest.testmod()
