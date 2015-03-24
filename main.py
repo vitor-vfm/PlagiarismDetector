@@ -2,7 +2,7 @@ import os
 import sys
 from graph import Graph
 
-class Detector(Graph):
+class Detector():
     """
     Main program class
 
@@ -30,9 +30,12 @@ class Detector(Graph):
         self._sequence_size = sequence_size
         self._num_sequences = num_sequences
 
+        self.detector_function = self.same_sentences
         self._docs_dict = self.create_docs_dict(directory)
 
-        self.split_docs_into_sentences(self._docs_dict)
+        #self.detector_function(self,self._docs_dict, sequence_size, num_sequences)
+
+
 
 
     @property
@@ -52,6 +55,20 @@ class Detector(Graph):
         return self._docs_dict
 
 
+    def same_sentences(self, docs_dict, sequence_size, num_sequences):
+        """
+        Tries to find plagiarized documents by finding sentences
+        in common
+
+        Simplest algorithm
+        """
+        
+        # split each document in the dict
+        # into sentences (split by punctuation marks)
+        docs_dict = self.split_docs_into_sentences(docs_dict)
+
+        doc_graph = Graph()
+        
 
 
     def create_docs_dict(self, directory):
@@ -102,20 +119,30 @@ class Detector(Graph):
         ['Str', ' to', ' test', ' breaking', ' function']
 
         """
-        punctuation = [",", ".", ";", "!", "?", "\n", "\t"]
+        punctuation = set([",", ".", ";", "!", "?", "\n", "\t"])
 
-        # make all punctuation marks the same,
-        # to facilitate split
-        for mark in punctuation:
-            s = s.replace(mark, punctuation[0])
+        #return list
+        ret = []
 
-        ls_sentences = s.split(punctuation[0])
+        curr_sentence = ""
 
-        # there might be empty sentences; remove them
-        ret = [sentence for sentence in ls_sentences if sentence != ""]
+        for c in s:
+
+            if c in punctuation:
+                if curr_sentence != "":
+                    # add sentence to return list
+                    # and reset current sentence
+                    ret.append(curr_sentence)
+                    curr_sentence = ""
+            else:
+                # add character to sentence
+                curr_sentence += c
+
+        #after loop, add last sentence
+        if curr_sentence != "":
+            ret.append(curr_sentence)
 
         return ret
-
 
 
 
