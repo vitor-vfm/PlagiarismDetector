@@ -30,10 +30,19 @@ class Detector():
         self._sequence_size = sequence_size
         self._num_sequences = num_sequences
 
-        self.detector_function = self.same_sentences
         self._docs_dict = self.create_docs_dict(directory)
 
-        #self.detector_function(self,self._docs_dict, sequence_size, num_sequences)
+    def run_detection(self, flag):
+        """
+        Runs the detection and returns a list of tuples
+        of possible plagiarisms
+
+        flag determines algorithm:
+        1 = same_sentences
+        """
+
+        if flag == 1:
+            return self.same_sentences(self._docs_dict, self._num_sequences)
 
 
 
@@ -55,7 +64,7 @@ class Detector():
         return self._docs_dict
 
 
-    def same_sentences(self, docs_dict, sequence_size, num_sequences):
+    def same_sentences(self, docs_dict, num_sequences):
         """
         Tries to find plagiarized documents by finding sentences
         in common
@@ -66,8 +75,40 @@ class Detector():
         # split each document in the dict
         # into sentences (split by punctuation marks)
         docs_dict = self.split_docs_into_sentences(docs_dict)
+        # print(docs_dict)
 
+        # create a graph for the docs and 
+        # add all docnames as vertices
         doc_graph = Graph()
+        for docname in docs_dict.keys():
+            doc_graph.add_vertex(docname)
+
+        # find number of sentences in common
+        # and add the numbers as edges
+
+        docnames_list = list(doc_graph.vertices())
+        for i, v1 in enumerate(docnames_list):
+            for v2 in docnames_list[i+1:]:
+                # each vertex is compared only to 
+                # its subsequent vertices in the list,
+                # to avoid double-computing
+
+                sentences_in_common = 0
+                sentences_in_2 = set(docs_dict[v2])
+
+                for sentence_in_1 in docs_dict[v1]:
+                    if sentence_in_1 in sentences_in_2:
+                        sentences_in_common += 1
+
+                if sentences_in_common >= num_sequences:
+                    doc_graph.add_edge((v1,v2), sentences_in_common)
+
+        # return list of edges in decreasing order of sentences in common
+        return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
+
+
+
+
         
 
 
@@ -102,6 +143,8 @@ class Detector():
             filestring = docs_dict[fl]
             split_file = self.break_into_sentences(filestring)
             docs_dict[fl] = split_file
+
+        return docs_dict
 
 
     def break_into_sentences(self, s):
@@ -148,20 +191,6 @@ class Detector():
 
 # end of Detector definition
 
-# TEST FUNCTIONS
-
-def test_create_docs_dict(detector):
-    for k in detector.docs_dict.keys():
-        print("Name", k)
-        print("first 50 chars", detector.docs_dict[k][:50])
-
-def test_split_docs_into_sentences(detector):
-    for k in detector.docs_dict.keys():
-        print("Name", k)
-        print("first 3 sentences: \n", detector.docs_dict[k][:3])
-
-# END OF TEST FUNCTIONS
-
 
 def run_program():
 
@@ -172,6 +201,16 @@ def run_program():
 
     # create detector
     detector = Detector(directory, sequence_size, num_sequences)
+
+    # run detection
+    plagiarisms = detector.run_detection(1)
+
+    if plagiarisms:
+        print("Possible plagiarisms")
+        for p in plagiarisms:
+            print(p)
+    else:
+        print("It seems like there are no plagiarisms")
 
 
 
