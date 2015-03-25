@@ -2,7 +2,7 @@ import os
 import sys
 from graph import Graph
 
-class Detector():
+class Detector:
     """
     Main program class
 
@@ -123,9 +123,9 @@ class Detector():
 
         for fh in filenames:
             path = directory + "/" + fh
-            curr_file = open(path, "r")
+            curr_file = open(path, "rb")
 
-            docs_dict[fh] = curr_file.read()
+            docs_dict[fh] = str(curr_file.read())
 
             curr_file.close()
 
