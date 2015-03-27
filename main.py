@@ -63,7 +63,6 @@ class Detector:
     def docs_dict(self):
         return self._docs_dict
 
-
     def same_sentences(self, docs_dict, num_sequences):
         """
         Tries to find plagiarized documents by finding sentences
@@ -75,7 +74,6 @@ class Detector:
         # split each document in the dict
         # into sentences (split by punctuation marks)
         docs_dict = self.split_docs_into_sentences(docs_dict)
-        # print(docs_dict)
 
         # create a graph for the docs and 
         # add all docnames as vertices
@@ -105,12 +103,6 @@ class Detector:
 
         # return list of edges in decreasing order of sentences in common
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
-
-
-
-
-        
-
 
     def create_docs_dict(self, directory):
         """
@@ -146,7 +138,6 @@ class Detector:
 
         return docs_dict
 
-
     def break_into_sentences(self, s):
         """
         Separte the file strings into sentences
@@ -154,6 +145,7 @@ class Detector:
         e.g.:
 
         'Hello, world' -> ['Hello', ' world']
+
 
         >>> det = Detector("/test_essays", 6, 18)
         >>> det.break_into_sentences('Hello, world')
@@ -170,7 +162,6 @@ class Detector:
         curr_sentence = ""
 
         for c in s:
-
             if c in punctuation:
                 if curr_sentence != "":
                     # add sentence to return list
@@ -191,7 +182,6 @@ class Detector:
 
 # end of Detector definition
 
-
 def run_program():
 
     # read arguments
@@ -207,8 +197,8 @@ def run_program():
 
     if plagiarisms:
         print("Possible plagiarisms")
-        for p in plagiarisms:
-            print(p)
+        for i, p in enumerate(plagiarisms):
+            print(i, ": ", p)
     else:
         print("It seems like there are no plagiarisms")
 
