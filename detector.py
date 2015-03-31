@@ -180,6 +180,35 @@ class Detector:
 
         return ret
 
+    def get_similar_words(word):
+        """
+        Returns similar words to a given word,
+        using the WordNet database
+        """
+        # get entry in database closest to word
+        entry = wn.synsets(word)[0]
+
+        # get hypernyms and hyponyms
+        similars = entry.hypernyms() + entry.hyponyms()
+
+        # go through similars and clean the list
+        return_ls = list()
+        for s in similars:
+            name = s.name()
+
+            # remove info about the entry
+            # e.g. bottle.n.01 -> bottle
+            name = name[:name.find(".")]
+
+            # remove underscores
+            name = name.replace("_", " ")
+
+            # remove entries that contain the word itself
+            # e.g. bottle -> wine_bottle
+            if not word in name:
+                return_ls.append(name)
+
+        return return_ls
 
 
 
