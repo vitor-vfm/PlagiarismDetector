@@ -1,4 +1,3 @@
-import os
 import sys
 from graph import Graph
 from detector import Detector
@@ -18,6 +17,6 @@ plagiarisms = detector.run_detection(1)
 if plagiarisms:
     print("Possible plagiarisms")
     for i, p in enumerate(plagiarisms):
-        print(i, ": ", p)
+        print(i, ": ", p[0], " and ", p[1])
 else:
     print("It seems like there are no plagiarisms")

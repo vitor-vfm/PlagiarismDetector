@@ -1,3 +1,8 @@
+import os
+import sys
+from graph import Graph
+from nltk.corpus import wordnet as wn
+
 class Detector:
     """
     Main program class
@@ -174,6 +179,7 @@ class Detector:
             ret.append(curr_sentence)
 
         return ret
+
 
 
 
