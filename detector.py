@@ -33,6 +33,7 @@ class Detector:
 
         self._docs_dict = self.create_docs_dict(directory)
 
+
     def run_detection(self, flag):
         """
         Runs the detection and returns a list of tuples
@@ -43,7 +44,9 @@ class Detector:
         """
 
         if flag == 1:
-            return self.same_sentences(self._docs_dict, self._num_sequences)
+            return self.same_sentences()
+        elif flag == 2:
+            return self.common_sequences()
 
 
 
@@ -65,7 +68,9 @@ class Detector:
         return self._docs_dict
 
 
-    def same_sentences(self, docs_dict, num_sequences):
+    # 1st algorithm
+
+    def same_sentences(self):
         """
         Tries to find plagiarized documents by finding sentences
         in common
@@ -75,13 +80,11 @@ class Detector:
         
         # split each document in the dict
         # into sentences (split by punctuation marks)
-        docs_dict = self.split_docs_into_sentences(docs_dict)
+        docs_dict = self.split_docs_into_sentences()
 
         # create a graph for the docs and 
         # add all docnames as vertices
-        doc_graph = Graph()
-        for docname in docs_dict.keys():
-            doc_graph.add_vertex(docname)
+        doc_graph = Graph(set(docs_dict.keys()))
 
         # find number of sentences in common
         # and add the numbers as edges
@@ -125,22 +128,23 @@ class Detector:
 
         return docs_dict
 
-    def split_docs_into_sentences(self, docs_dict):
+    def split_docs_into_sentences(self):
         """
         Splits all the document files inside 
         the dictionary into sentences
         """
 
-        filenames = docs_dict.keys()
+        filenames = self._docs_dict.keys()
+        split_dict = {}
 
         for fl in filenames:
-            filestring = docs_dict[fl]
+            filestring = self._docs_dict[fl]
             split_file = self.break_into_sentences(filestring)
-            docs_dict[fl] = split_file
+            split_dict[fl] = split_file
 
-        return docs_dict
+        return split_dict
 
-    def break_into_sentences(self, s):
+    def break_into_sentences(self, s, into_words = False):
         """
         Separte the file strings into sentences
         (strings delimitated by punctuation)
@@ -153,9 +157,17 @@ class Detector:
         ['Hello', ' world']
         >>> det.break_into_sentences('Str, to. test; breaking? function')
         ['Str', ' to', ' test', ' breaking', ' function']
+        >>> det.break_into_sentences('Str to test; breaking function?', True)
+        ['Str', 'to', 'test', 'breaking', 'function']
 
         """
         punctuation = set([",", ".", ";", "!", "?", "\n", "\t"])
+
+        if into_words:
+            # if this flag is set, break string
+            # into words instead of sentences
+            # to do that, separate by spaces as well
+            punctuation.add(" ")
 
         #return list
         ret = []
@@ -180,6 +192,90 @@ class Detector:
 
         return ret
 
+
+    # 2nd Algorithm
+
+    def common_sequences(self):
+        """
+        Find the pairs of documents that have
+        sequences in common of size n or
+        greater (where n was determined by the user)
+
+        Each pair of documents gets a score equal to the sum of the 
+        lengths of the common sequences
+        """
+
+        docnames_list = list(self._docs_dict.keys())
+
+        docs_dict = self._docs_dict
+        doc_graph = Graph(set(docnames_list))
+
+        for i, v1 in enumerate(docnames_list):
+            for v2 in docnames_list[i+1:]:
+                # each vertex is compared only to 
+                # its subsequent vertices in the list,
+                # to avoid double-computing
+                print("pair : ",v1,v2)
+                nbr = self.common_sequences_score(docs_dict[v1],docs_dict[v2],self._sequence_size)
+                print("score: ",nbr)
+                if nbr > 0:
+                    doc_graph.add_edge((v1,v2), nbr)
+
+        # return list of edges in decreasing order of sequences in common
+        return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
+
+    def common_sequences_score(self,l1,l2,size=0):
+        """
+        Finds how many substrings 
+        are common between 2 strings
+        and gives a score equal to the sum of the lengths
+        of these common substrings
+        
+        Only substrings greater or equal to 'size' are counted
+
+        O( len(l1) * len(l2) )
+
+        """
+
+        memo = {}
+        nbr = 0
+        print("got into common_sequences_score")
+
+        # the longest common substring starting at l1[i] and l2[j] has length:
+        # 1) 0, if l1[i] != l2[j]
+        # 2) 1 + length of longest common substring starting at l1[i+1] and l2[j+1]
+        # This property will be used to find lengths of all common substrings bigger or equal
+        # to 'size'
+
+        # go through all pairs i,j starting at the ends of the strings
+        for i in range(len(l1))[::-1]:
+            for j in range(len(l2))[::-1]:
+                # only add non-zero elements to memo
+                # to save memory
+                if l1[i] == l2[j]:
+                    if (i+1,j+1) in memo:
+                        memo[(i,j)] = 1 + memo[(i+1,j+1)]
+                    else:
+                        memo[(i,j)] = 1
+
+                # if l1[i-1] and l2[j-1] exist and are different,
+                # then the common substring starting at (i,j)
+                # is a substring of l1 and l2, but not part
+                # of any other common substring
+
+                # Add its length to score if it's above
+                # the size threshold
+                if i == 0 or j == 0 or l1[i-1] != l2[j-1]:
+                    if (i,j) in memo and memo[(i,j)] >= size:
+                        nbr += memo[(i,j)]
+                        print("nbr so far", nbr)
+
+        return nbr
+
+    # 3rd Algorithm
+
+    # 4th Algorithm
+    
     def get_similar_words(word):
         """
         Returns similar words to a given word,
@@ -209,6 +305,10 @@ class Detector:
                 return_ls.append(name)
 
         return return_ls
+
+
+
+            
 
 
 

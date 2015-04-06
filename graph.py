@@ -200,7 +200,10 @@ class Graph:
         >>> g.get_edge_weight((1,2))
         4
         """
-        return self._edges[e]
+        if self.is_edge(e):
+            return self._edges[e]
+        else:
+            raise ValueError("Edge not in graph")
 
 
 #END OF CLASS DEFINITION
