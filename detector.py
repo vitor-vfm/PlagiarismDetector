@@ -13,7 +13,7 @@ class Detector:
     into a graph and detects plagiarism
     """
 
-    def __init__(self, directory, threshold = 10, algorithm = 3):
+    def __init__(self, directory, threshold = 100, algorithm = 2):
         """
         >>> det = Detector("/test_essays", 6, 18)
         >>> det.directory
@@ -36,7 +36,7 @@ class Detector:
         self._docs_dict = self.create_docs_dict(directory)
 
 
-    def run_detection(self, flag):
+    def run_detection(self, flag = 0):
         """
         Runs the detection and returns a list of tuples
         of possible plagiarisms
@@ -44,13 +44,15 @@ class Detector:
         flag determines algorithm:
         1 = same_sentences
         """
+        if flag < 1 or flag > 4:
+            flag = self._algorithm
 
         if flag == 1:
             return self.same_sentences()
         elif flag == 2:
             return self.common_sequences()
         elif flag == 4:
-            return self.it_idf_similarity()
+            return self.tf_idf_similarity()
 
 
 
@@ -130,7 +132,7 @@ class Detector:
                 if sentences_in_common >= self._threshold:
                     doc_graph.add_edge((v1,v2), sentences_in_common)
 
-        # return list of edges in decreasing order of sentences in common
+        # return sorted list of edges, from most in common to least
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
 
 
@@ -186,6 +188,8 @@ class Detector:
                 if curr_sentence != "":
                     # add sentence to return list
                     # and reset current sentence
+                    if into_words:
+                        curr_sentence = curr_sentence.lower()
                     ret.append(curr_sentence)
                     curr_sentence = ""
             else:
@@ -228,7 +232,7 @@ class Detector:
                 if nbr > 0:
                     doc_graph.add_edge((v1,v2), nbr)
 
-        # return list of edges in decreasing order of sequences in common
+        # return sorted list of edges, from most in common to least
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
 
     def common_sequences_score(self,l1,l2,size=0):
@@ -281,8 +285,14 @@ class Detector:
 
     # 4th Algorithm
     
-    def it_idf_similarity(self):
+    def tf_idf_similarity(self):
         """
+        Vector Space Model
+
+        This algorithm is based on tf-idf information retrieval
+
+        For every pair of documents, turn both into a vector of word frequencies
+        and measure their similarity by calculating the cosine of these vectors
         """
         docnames_list = list(self._docs_dict.keys())
 
@@ -302,6 +312,7 @@ class Detector:
             # eliminate duplicates
             wordspace = list(set(docs_dict[v1]))
 
+            # make a dictionary that maps each word in the corpus to its idf
             idf = self.inverse_document_frequency(wordspace, docs_dict_set_words)
 
             doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
@@ -317,12 +328,16 @@ class Detector:
                     print("sim", v1, v2, sim)
                     doc_graph.add_edge((v1,v2), sim)
 
-        # return list of edges in decreasing order of sequences in common
+        # return sorted list of edges, from most in common to least
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
 
     def cosine_similarity(self, doc1, doc2):
         """
-        Get the cosine similarity of two documents vectors
+        Get the cosine of two document vectors
+
+        cosine = dot product / product of magnitudes
+
+        The higher the cosine, the closer the vectors are
         """
 
         mag1 = 0
@@ -346,6 +361,8 @@ class Detector:
 
     def inverse_document_frequency(self,wordspace, words_sets):
         """
+        A measure of how rare a word is
+        in the collection of documents
         """
         idf = {}
 
@@ -354,16 +371,28 @@ class Detector:
             for doc in words_sets:
                 if word in doc:
                     count += 1
-            idf[word] = 1 + math.log(len(wordspace)/count)
+            print(word,count)
+            idf[word] = math.log(len(wordspace)/(count + 1))
 
         return idf
 
     def document_vector(self,doc,idf,wordspace):
         """
+        Returns a vector corresponding to each document
+        where each element x_i corresponds to the tf-idf
+        (term frequency)*(inverse document frequency) of
+        word i in the wordspace
+
+        term frequency = how frequent a word is in the document
+        inverse_document_frequency = a measure of how rare a word is
+        in the collection of documents
         """
         tf_idf = []
         for word in wordspace:
+            # count the number of ocurrences of the word in the doc and
+            # divide by length to get a percentage (float between 0 and 1)
             term_frequency = (doc.count(word)/float(len(doc)))
+
             tf_idf.append(term_frequency*idf[word])
 
         return tf_idf
