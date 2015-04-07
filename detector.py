@@ -1,5 +1,7 @@
 import os
 import sys
+import math
+from collections import Counter
 from graph import Graph
 from nltk.corpus import wordnet as wn
 
@@ -47,6 +49,8 @@ class Detector:
             return self.same_sentences()
         elif flag == 2:
             return self.common_sequences()
+        elif flag == 4:
+            return self.it_idf_similarity()
 
 
 
@@ -68,6 +72,25 @@ class Detector:
         return self._docs_dict
 
 
+    def create_docs_dict(self, directory):
+        """
+        reads the directory and returns a dict
+        with filenames as keys and files (as strings)
+        as values
+        """
+        filenames = os.listdir(directory)
+        docs_dict = {}
+
+        for fh in filenames:
+            path = directory + "/" + fh
+            curr_file = open(path, "rb")
+
+            docs_dict[fh] = str(curr_file.read())
+
+            curr_file.close()
+
+        return docs_dict
+    
     # 1st algorithm
 
     def same_sentences(self):
@@ -109,24 +132,6 @@ class Detector:
         # return list of edges in decreasing order of sentences in common
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
 
-    def create_docs_dict(self, directory):
-        """
-        reads the directory and returns a dict
-        with filenames as keys and files (as strings)
-        as values
-        """
-        filenames = os.listdir(directory)
-        docs_dict = {}
-
-        for fh in filenames:
-            path = directory + "/" + fh
-            curr_file = open(path, "rb")
-
-            docs_dict[fh] = str(curr_file.read())
-
-            curr_file.close()
-
-        return docs_dict
 
     def split_docs_into_sentences(self):
         """
@@ -276,37 +281,174 @@ class Detector:
 
     # 4th Algorithm
     
-    def get_similar_words(word):
+    def it_idf_similarity(self):
         """
-        Returns similar words to a given word,
-        using the WordNet database
         """
-        # get entry in database closest to word
-        entry = wn.synsets(word)[0]
+        docnames_list = list(self._docs_dict.keys())
 
-        # get hypernyms and hyponyms
-        similars = entry.hypernyms() + entry.hyponyms()
+        # create dictionaries with each document as
+        # a list and a set of words
+        docs_dict = {}
+        docs_dict_set_words = {}
+        for doc in docnames_list:
+            docs_dict[doc] = self.break_into_sentences(self._docs_dict[doc], into_words = True)
+            docs_dict_set_words[doc] = set(docs_dict[doc])
 
-        # go through similars and clean the list
-        return_ls = list()
-        for s in similars:
-            name = s.name()
+        # create graph
+        doc_graph = Graph(set(docnames_list))
 
-            # remove info about the entry
-            # e.g. bottle.n.01 -> bottle
-            name = name[:name.find(".")]
+        for i, v1 in enumerate(docnames_list):
+            # use words in v1 as corpus for this query
+            # eliminate duplicates
+            wordspace = list(set(docs_dict[v1]))
 
-            # remove underscores
-            name = name.replace("_", " ")
+            idf = self.inverse_document_frequency(wordspace, docs_dict_set_words)
 
-            # remove entries that contain the word itself
-            # e.g. bottle -> wine_bottle
-            if not word in name:
-                return_ls.append(name)
+            doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
 
-        return return_ls
+            for v2 in docnames_list[i+1:]:
+                # each vertex is compared only to 
+                # its subsequent vertices in the list,
+                # to avoid double-computing
+                doc2 = self.document_vector(docs_dict[v2], idf, wordspace)
+                sim = self.cosine_similarity(doc1,doc2)
+                if sim >= self._sequence_size:
+                    print("sim", v1, v2, sim)
+                    doc_graph.add_edge((v1,v2), sim)
+
+        # return list of edges in decreasing order of sequences in common
+        return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
+
+    def cosine_similarity(self, doc1, doc2):
+        """
+        Get the cosine similarity of two documents vectors
+        """
+
+        mag1 = 0
+        mag2 = 0
+        dot_product = 0
+        for i in range(len(doc1)):
+            mag1 += doc1[i]**2
+            mag2 += doc2[i]**2
+            dot_product += doc1[i]*doc2[i]
+
+        mag1 = math.sqrt(mag1)
+        mag2 = math.sqrt(mag2)
+        print("mag1",mag1)
+        print("mag2",mag2)
+        print("dot_product",dot_product)
+
+        if dot_product == 0:
+            return 0
+        else:
+            return dot_product/(mag1*mag2)
+
+    def inverse_document_frequency(self,wordspace, words_sets):
+        """
+        """
+        idf = {}
+
+        for word in wordspace:
+            count = 0
+            for doc in words_sets:
+                if word in doc:
+                    count += 1
+            idf[word] = 1 + math.log(len(wordspace)/count)
+
+        return idf
+
+    def document_vector(self,doc,idf,wordspace):
+        """
+        """
+        tf_idf = []
+        for word in wordspace:
+            term_frequency = (doc.count(word)/float(len(doc)))
+            tf_idf.append(term_frequency*idf[word])
+
+        return tf_idf
 
 
+
+
+
+    # def similarity(self):
+    #     """
+    #     """
+
+    #     docnames_list = list(self._docs_dict.keys())
+
+    #     docs_dict = self._docs_dict
+    #     doc_graph = Graph(set(docnames_list))
+
+    #     for i, v1 in enumerate(docnames_list):
+    #         for v2 in docnames_list[i+1:]:
+    #             # each vertex is compared only to 
+    #             # its subsequent vertices in the list,
+    #             # to avoid double-computing
+    #             print("pair : ",v1,v2)
+    #             s1 = self.break_into_sentences(docs_dict[v1], into_words = True)
+    #             s2 = self.break_into_sentences(docs_dict[v2], into_words = True)
+    #             nbr = self.semantic_similarity(s1,s2)
+    #             print("score: ",nbr)
+    #             if nbr > 0:
+    #                 doc_graph.add_edge((v1,v2), nbr)
+
+    #     # return list of edges in decreasing order of sequences in common
+    #     return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
+
+    # def get_similar_words(self,word):
+    #     """
+    #     Returns similar words to a given word,
+    #     using the WordNet database
+    #     """
+    #     if len(word) <= 2 or word.lower() == 'the':
+    #         # ignore small words and the definite article
+    #         return set()
+
+    #     similars = wn.synsets(word)
+    #     if len(similars) == 0:
+    #         # didn't find word in database
+    #         # return empty set
+    #         return set()
+
+    #     # get entry in database closest to word
+    #     closest = wn.synsets(word)[0]
+
+    #     # get hypernyms and hyponyms
+    #     similars += closest.hypernyms() + closest.hyponyms()
+
+    #     # go through similars and clean the list
+    #     return_set = set()
+    #     for s in similars:
+    #         name = s.name()
+
+    #         # remove info about the entry
+    #         # e.g. bottle.n.01 -> bottle
+    #         name = name[:name.find(".")]
+
+    #         # remove underscores
+    #         name = name.replace("_", " ")
+
+    #         # remove entries that contain the word itself
+    #         # e.g. bottle -> wine_bottle
+    #         if not word in name:
+    #             return_set.add(name)
+
+    #     return return_set
+
+    # def semantic_similarity(self,s1,s2):
+    #     """
+    #     Returns the semantic similarity of 
+    #     two lists of words
+    #     """
+    #     total = 0
+    #     for i, w1 in enumerate(s1):
+    #         similars1 = self.get_similar_words(w1)
+    #         for w2 in s2[i:]:
+    #             if w2 in similars1:
+    #                 total += 1
+
+    #     return total
 
             
 
