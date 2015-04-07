@@ -13,14 +13,14 @@ class Detector:
     into a graph and detects plagiarism
     """
 
-    def __init__(self, directory, sequence_size = 5, num_sequences = 10):
+    def __init__(self, directory, threshold = 10, algorithm = 3):
         """
         >>> det = Detector("/test_essays", 6, 18)
         >>> det.directory
         '/test_essays'
-        >>> det.sequence_size
+        >>> det.threshold
         6
-        >>> det.num_sequences
+        >>> det.algorithm
         18
         """
 
@@ -30,8 +30,8 @@ class Detector:
         if directory[0] != ".":
             directory = "." + directory
             
-        self._sequence_size = sequence_size
-        self._num_sequences = num_sequences
+        self._threshold = threshold
+        self._algorithm = algorithm
 
         self._docs_dict = self.create_docs_dict(directory)
 
@@ -60,12 +60,12 @@ class Detector:
         return self._directory
 
     @property
-    def sequence_size(self):
-        return self._sequence_size
+    def threshold(self):
+        return self._threshold
 
     @property
-    def num_sequences(self):
-        return self._num_sequences
+    def algorithm(self):
+        return self._algorithm
 
     @property
     def docs_dict(self):
@@ -114,7 +114,8 @@ class Detector:
 
         docnames_list = list(doc_graph.vertices())
         for i, v1 in enumerate(docnames_list):
-            for v2 in docnames_list[i+1:]:
+            for j in range(i+1,len(docnames_list)):
+                v2 = docnames_list[j]
                 # each vertex is compared only to 
                 # its subsequent vertices in the list,
                 # to avoid double-computing
@@ -126,7 +127,7 @@ class Detector:
                     if sentence_in_1 in sentences_in_2:
                         sentences_in_common += 1
 
-                if sentences_in_common >= num_sequences:
+                if sentences_in_common >= self._threshold:
                     doc_graph.add_edge((v1,v2), sentences_in_common)
 
         # return list of edges in decreasing order of sentences in common
@@ -216,12 +217,13 @@ class Detector:
         doc_graph = Graph(set(docnames_list))
 
         for i, v1 in enumerate(docnames_list):
-            for v2 in docnames_list[i+1:]:
+            for j in range(i+1,len(docnames_list)):
+                v2 = docnames_list[j]
                 # each vertex is compared only to 
                 # its subsequent vertices in the list,
                 # to avoid double-computing
                 print("pair : ",v1,v2)
-                nbr = self.common_sequences_score(docs_dict[v1],docs_dict[v2],self._sequence_size)
+                nbr = self.common_sequences_score(docs_dict[v1],docs_dict[v2],self._threshold)
                 print("score: ",nbr)
                 if nbr > 0:
                     doc_graph.add_edge((v1,v2), nbr)
@@ -244,7 +246,6 @@ class Detector:
 
         memo = {}
         nbr = 0
-        print("got into common_sequences_score")
 
         # the longest common substring starting at l1[i] and l2[j] has length:
         # 1) 0, if l1[i] != l2[j]
@@ -253,8 +254,8 @@ class Detector:
         # to 'size'
 
         # go through all pairs i,j starting at the ends of the strings
-        for i in range(len(l1))[::-1]:
-            for j in range(len(l2))[::-1]:
+        for i in range(len(l1)-1,-1,-1):
+            for j in range(len(l2)-1,-1,-1):
                 # only add non-zero elements to memo
                 # to save memory
                 if l1[i] == l2[j]:
@@ -273,7 +274,6 @@ class Detector:
                 if i == 0 or j == 0 or l1[i-1] != l2[j-1]:
                     if (i,j) in memo and memo[(i,j)] >= size:
                         nbr += memo[(i,j)]
-                        print("nbr so far", nbr)
 
         return nbr
 
@@ -306,13 +306,14 @@ class Detector:
 
             doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
 
-            for v2 in docnames_list[i+1:]:
+            for j in range(i+1,len(docnames_list)):
+                v2 = docnames_list[j]
                 # each vertex is compared only to 
                 # its subsequent vertices in the list,
                 # to avoid double-computing
                 doc2 = self.document_vector(docs_dict[v2], idf, wordspace)
                 sim = self.cosine_similarity(doc1,doc2)
-                if sim >= self._sequence_size:
+                if sim >= self._threshold:
                     print("sim", v1, v2, sim)
                     doc_graph.add_edge((v1,v2), sim)
 
