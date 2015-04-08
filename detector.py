@@ -3,7 +3,6 @@ import sys
 import math
 from collections import Counter
 from graph import Graph
-from nltk.corpus import wordnet as wn
 
 class Detector:
     """
@@ -13,7 +12,7 @@ class Detector:
     into a graph and detects plagiarism
     """
 
-    def __init__(self, directory, threshold = 100, algorithm = 2):
+    def __init__(self, directory = "/test_essays", threshold = 100, algorithm = 2):
         """
         >>> det = Detector("/test_essays", 6, 18)
         >>> det.directory
@@ -86,9 +85,7 @@ class Detector:
         for fh in filenames:
             path = directory + "/" + fh
             curr_file = open(path, "rb")
-
-            docs_dict[fh] = str(curr_file.read())
-
+            docs_dict[fh] = curr_file.read().decode("utf-8", "ignore")
             curr_file.close()
 
         return docs_dict
@@ -152,7 +149,7 @@ class Detector:
 
         return split_dict
 
-    def break_into_sentences(self, s, into_words = False):
+    def break_into_sentences(self, s):
         """
         Separte the file strings into sentences
         (strings delimitated by punctuation)
@@ -165,17 +162,8 @@ class Detector:
         ['Hello', ' world']
         >>> det.break_into_sentences('Str, to. test; breaking? function')
         ['Str', ' to', ' test', ' breaking', ' function']
-        >>> det.break_into_sentences('Str to test; breaking function?', True)
-        ['Str', 'to', 'test', 'breaking', 'function']
-
         """
         punctuation = set([",", ".", ";", "!", "?", "\n", "\t"])
-
-        if into_words:
-            # if this flag is set, break string
-            # into words instead of sentences
-            # to do that, separate by spaces as well
-            punctuation.add(" ")
 
         #return list
         ret = []
@@ -188,8 +176,6 @@ class Detector:
                 if curr_sentence != "":
                     # add sentence to return list
                     # and reset current sentence
-                    if into_words:
-                        curr_sentence = curr_sentence.lower()
                     ret.append(curr_sentence)
                     curr_sentence = ""
             else:
@@ -213,6 +199,9 @@ class Detector:
 
         Each pair of documents gets a score equal to the sum of the 
         lengths of the common sequences
+
+        This is a variation of the Longest Common Substring problem
+        using dynamic programming
         """
 
         docnames_list = list(self._docs_dict.keys())
@@ -248,6 +237,8 @@ class Detector:
 
         """
 
+        # the memo dictionary will be used 
+        # as a memoization matrix
         memo = {}
         nbr = 0
 
@@ -291,29 +282,36 @@ class Detector:
 
         This algorithm is based on tf-idf information retrieval
 
-        For every pair of documents, turn both into a vector of word frequencies
+        For every pair of documents, turn both into a vector of n-gram frequencies
         and measure their similarity by calculating the cosine of these vectors
+
+        An n-gram is a series of n words
+
+        For this algorithm, the 'threshold' parameter
+        is used as the size n of the n-grams
         """
         docnames_list = list(self._docs_dict.keys())
+        ngram_size = self._threshold
+        min_similarity = 0.2
 
         # create dictionaries with each document as
-        # a list and a set of words
+        # a list and a set of n-grams 
         docs_dict = {}
-        docs_dict_set_words = {}
+        docs_dict_set_ngrams = {}
         for doc in docnames_list:
-            docs_dict[doc] = self.break_into_sentences(self._docs_dict[doc], into_words = True)
-            docs_dict_set_words[doc] = set(docs_dict[doc])
+            docs_dict[doc] = self.break_into_ngrams(self._docs_dict[doc], ngram_size)
+            docs_dict_set_ngrams[doc] = set(docs_dict[doc])
 
         # create graph
         doc_graph = Graph(set(docnames_list))
 
         for i, v1 in enumerate(docnames_list):
-            # use words in v1 as corpus for this query
+            # use ngrams in v1 as corpus for this query
             # eliminate duplicates
             wordspace = list(set(docs_dict[v1]))
 
-            # make a dictionary that maps each word in the corpus to its idf
-            idf = self.inverse_document_frequency(wordspace, docs_dict_set_words)
+            # make a dictionary that maps each n-gram in the corpus to its idf
+            idf = self.inverse_document_frequency(wordspace, docs_dict_set_ngrams)
 
             doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
 
@@ -324,8 +322,7 @@ class Detector:
                 # to avoid double-computing
                 doc2 = self.document_vector(docs_dict[v2], idf, wordspace)
                 sim = self.cosine_similarity(doc1,doc2)
-                if sim >= self._threshold:
-                    print("sim", v1, v2, sim)
+                if sim >= min_similarity:
                     doc_graph.add_edge((v1,v2), sim)
 
         # return sorted list of edges, from most in common to least
@@ -350,9 +347,6 @@ class Detector:
 
         mag1 = math.sqrt(mag1)
         mag2 = math.sqrt(mag2)
-        print("mag1",mag1)
-        print("mag2",mag2)
-        print("dot_product",dot_product)
 
         if dot_product == 0:
             return 0
@@ -361,18 +355,24 @@ class Detector:
 
     def inverse_document_frequency(self,wordspace, words_sets):
         """
-        A measure of how rare a word is
+        A measure of how rare an n-gram is
         in the collection of documents
+
+        idf = log( N / (count + 1) )
+        where:
+        N = size of document set
+        count = number of documents that contain the n-gram
+
+        (the +1 is to avoid problems when count is 0)
         """
         idf = {}
 
-        for word in wordspace:
+        for ngram in wordspace:
             count = 0
             for doc in words_sets:
-                if word in doc:
+                if ngram in doc:
                     count += 1
-            print(word,count)
-            idf[word] = math.log(len(wordspace)/(count + 1))
+            idf[ngram] = math.log(len(wordspace)/(count + 1))
 
         return idf
 
@@ -384,104 +384,64 @@ class Detector:
         word i in the wordspace
 
         term frequency = how frequent a word is in the document
-        inverse_document_frequency = a measure of how rare a word is
+        inverse_document_frequency = a measure of how rare an n-gram is
         in the collection of documents
         """
         tf_idf = []
-        for word in wordspace:
-            # count the number of ocurrences of the word in the doc and
+        for ngram in wordspace:
+            # count the number of ocurrences of the ngram in the doc and
             # divide by length to get a percentage (float between 0 and 1)
-            term_frequency = (doc.count(word)/float(len(doc)))
+            term_frequency = (doc.count(ngram)/float(len(doc)))
 
-            tf_idf.append(term_frequency*idf[word])
+            tf_idf.append(term_frequency*idf[ngram])
 
         return tf_idf
 
+    def break_into_ngrams(self, s, n):
+        """
+        Separate the file strings into n-grams
+        (sequences of n words)
+        e.g.:
 
+        Similar to break_into_sentences
+        """
+        punctuation = set([",", ".", ";", "!", "?", "\n", "\t"])
 
+        #return list
+        ret = []
 
+        curr_ngram = ""
+        n_gram_count = 0
+        for c in s:
 
-    # def similarity(self):
-    #     """
-    #     """
+            # ignore punctuation
+            if c in punctuation:
+                continue
 
-    #     docnames_list = list(self._docs_dict.keys())
+            # spaces mark separation between words
+            if c == " ":
+                n_gram_count += 1
 
-    #     docs_dict = self._docs_dict
-    #     doc_graph = Graph(set(docnames_list))
+            # every n words, add n-gram to list
+            if n_gram_count == n:
+                # make it not case-sensitive
+                curr_ngram = curr_ngram.lower()
+                if curr_ngram != "":
+                    ret.append(curr_ngram)
+                # reset current n-gram
+                curr_ngram = ""
+                # reset counter
+                n_gram_count = 0
+            else:
+                # if we haven't completed an n-gram,
+                # simply add the character
+                curr_ngram += c
 
-    #     for i, v1 in enumerate(docnames_list):
-    #         for v2 in docnames_list[i+1:]:
-    #             # each vertex is compared only to 
-    #             # its subsequent vertices in the list,
-    #             # to avoid double-computing
-    #             print("pair : ",v1,v2)
-    #             s1 = self.break_into_sentences(docs_dict[v1], into_words = True)
-    #             s2 = self.break_into_sentences(docs_dict[v2], into_words = True)
-    #             nbr = self.semantic_similarity(s1,s2)
-    #             print("score: ",nbr)
-    #             if nbr > 0:
-    #                 doc_graph.add_edge((v1,v2), nbr)
+        #after loop, add last ngram
+        if curr_ngram != "":
+            ret.append(curr_ngram)
 
-    #     # return list of edges in decreasing order of sequences in common
-    #     return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
-
-    # def get_similar_words(self,word):
-    #     """
-    #     Returns similar words to a given word,
-    #     using the WordNet database
-    #     """
-    #     if len(word) <= 2 or word.lower() == 'the':
-    #         # ignore small words and the definite article
-    #         return set()
-
-    #     similars = wn.synsets(word)
-    #     if len(similars) == 0:
-    #         # didn't find word in database
-    #         # return empty set
-    #         return set()
-
-    #     # get entry in database closest to word
-    #     closest = wn.synsets(word)[0]
-
-    #     # get hypernyms and hyponyms
-    #     similars += closest.hypernyms() + closest.hyponyms()
-
-    #     # go through similars and clean the list
-    #     return_set = set()
-    #     for s in similars:
-    #         name = s.name()
-
-    #         # remove info about the entry
-    #         # e.g. bottle.n.01 -> bottle
-    #         name = name[:name.find(".")]
-
-    #         # remove underscores
-    #         name = name.replace("_", " ")
-
-    #         # remove entries that contain the word itself
-    #         # e.g. bottle -> wine_bottle
-    #         if not word in name:
-    #             return_set.add(name)
-
-    #     return return_set
-
-    # def semantic_similarity(self,s1,s2):
-    #     """
-    #     Returns the semantic similarity of 
-    #     two lists of words
-    #     """
-    #     total = 0
-    #     for i, w1 in enumerate(s1):
-    #         similars1 = self.get_similar_words(w1)
-    #         for w2 in s2[i:]:
-    #             if w2 in similars1:
-    #                 total += 1
-
-    #     return total
-
-            
-
+        return ret
 
 
 # end of Detector definition
