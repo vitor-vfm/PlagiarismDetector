@@ -1,6 +1,7 @@
 import os
 import sys
 import math
+from suffix_tree import SuffixTree
 from collections import Counter
 from graph import Graph
 
@@ -12,7 +13,7 @@ class Detector:
     into a graph and detects plagiarism
     """
 
-    def __init__(self, directory = "/test_essays", threshold = 100, algorithm = 2):
+    def __init__(self, directory = "/test_essays", threshold = 100, algorithm = 2, mFile = None):
         """
         >>> det = Detector("/test_essays", 6, 18)
         >>> det.directory
@@ -25,6 +26,7 @@ class Detector:
 
         # read attritbutes
         self._directory = directory
+        self._file = mFile
         # add a dot to beginnig of file path
         if directory[0] != ".":
             directory = "." + directory
@@ -50,6 +52,8 @@ class Detector:
             return self.same_sentences()
         elif flag == 2:
             return self.common_sequences()
+        elif flag == 3:
+            return self.suffix_tree()
         elif flag == 4:
             return self.tf_idf_similarity()
 
@@ -88,6 +92,11 @@ class Detector:
             docs_dict[fh] = curr_file.read().decode("utf-8", "ignore")
             curr_file.close()
 
+        if self._file is not None:
+            curr_file = open("./" + self._file)
+            self.mainFile = curr_file.read().decode("utf-8", "ignore")
+            curr_file.close()
+
         return docs_dict
     
     # 1st algorithm
@@ -110,24 +119,38 @@ class Detector:
 
         # find number of sentences in common
         # and add the numbers as edges
-
         docnames_list = list(doc_graph.vertices())
-        for i, v1 in enumerate(docnames_list):
-            for j in range(i+1,len(docnames_list)):
-                v2 = docnames_list[j]
-                # each vertex is compared only to 
-                # its subsequent vertices in the list,
-                # to avoid double-computing
+        if self._file is None:
+            for i, v1 in enumerate(docnames_list):
+                for j in range(i+1,len(docnames_list)):
+                    v2 = docnames_list[j]
+                    # each vertex is compared only to 
+                    # its subsequent vertices in the list,
+                    # to avoid double-computing
 
+                    sentences_in_common = 0
+                    sentences_in_2 = set(docs_dict[v2])
+
+                    for sentence_in_1 in docs_dict[v1]:
+                        if sentence_in_1 in sentences_in_2:
+                            sentences_in_common += 1
+
+                    if sentences_in_common >= self._threshold:
+                        doc_graph.add_edge((v1,v2), sentences_in_common)
+        else:
+            # Do the same thing, except only there is no inner loop
+            doc_graph.add_vertex(self._file)
+            v2 = self._file
+            sentences_in_2 = set(self.break_into_sentences(self.mainFile))
+            for i, v1 in enumerate(docnames_list):
+                
                 sentences_in_common = 0
-                sentences_in_2 = set(docs_dict[v2])
-
                 for sentence_in_1 in docs_dict[v1]:
                     if sentence_in_1 in sentences_in_2:
                         sentences_in_common += 1
 
                 if sentences_in_common >= self._threshold:
-                    doc_graph.add_edge((v1,v2), sentences_in_common)
+                    doc_graph.add_edge((v1, v2), sentences_in_common)
 
         # return sorted list of edges, from most in common to least
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
@@ -209,17 +232,24 @@ class Detector:
         docs_dict = self._docs_dict
         doc_graph = Graph(set(docnames_list))
 
-        for i, v1 in enumerate(docnames_list):
-            for j in range(i+1,len(docnames_list)):
-                v2 = docnames_list[j]
-                # each vertex is compared only to 
-                # its subsequent vertices in the list,
-                # to avoid double-computing
-                print("pair : ",v1,v2)
-                nbr = self.common_sequences_score(docs_dict[v1],docs_dict[v2],self._threshold)
-                print("score: ",nbr)
+        if self._file is None:
+            for i, v1 in enumerate(docnames_list):
+                for j in range(i+1, len(docnames_list)):
+                    v2 = docnames_list[j]
+                    # each vertex is compared only to 
+                    # its subsequent vertices in the list,
+                    # to avoid double-computing
+                    nbr = self.common_sequences_score(docs_dict[v1], docs_dict[v2], self._threshold)
+                    if nbr > 0:
+                        doc_graph.add_edge((v1, v2), nbr)
+        else:
+            v2 = self._file
+            doc_graph.add_vertex(v2)
+            for i, v1 in enumerate(docnames_list):
+                nbr = self.common_sequences_score(docs_dict[v1], self.mainFile, self._threshold)
                 if nbr > 0:
-                    doc_graph.add_edge((v1,v2), nbr)
+                    doc_graph.add_edge((v1, v2), nbr)
+
 
         # return sorted list of edges, from most in common to least
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
@@ -273,6 +303,43 @@ class Detector:
         return nbr
 
     # 3rd Algorithm
+    def suffix_tree(self):
+        '''
+        Use a suffix-tree to quickly get the longest common subsequence.
+        Rank according to the length
+
+        O(len(l1) + len(l2))
+        '''
+        docnames_list = list(self._docs_dict.keys())
+        doc_graph = Graph(set(docnames_list))
+        docs_dict = self._docs_dict
+
+        if self._file is None:
+            for i, v1 in enumerate(docnames_list):
+                for j in range(i+1, len(docnames_list)):
+                    v2 = docnames_list[j]
+                    # each vertex is compared only to
+                    # its subsequent vertices in the list,
+                    # to avoid double-computing
+                    tree = SuffixTree(docs_dict[v1], docs_dict[v2])
+                    tree.buildSuffixTree()
+                    lcs = tree.getLCS()
+                    nbr = len(lcs)
+                    if nbr > self._threshold:
+                        doc_graph.add_edge((v1, v2), nbr)
+        else:
+            v2 = self._file
+            doc_graph.add_vertex(v2)
+            for i, v1 in enumerate(docnames_list):
+                tree = SuffixTree(docs_dict[v1], self.mainFile)
+                tree.buildSuffixTree()
+                lcs = tree.getLCS()
+                nbr = len(lcs)
+                if nbr > self._threshold:
+                    doc_graph.add_edge((v1, v2), nbr)
+
+        # return sorted list of edges, from most in common to least
+        return sorted(doc_graph.edges(), key=doc_graph.edges().get, reverse=True)
 
     # 4th Algorithm
     
@@ -291,7 +358,7 @@ class Detector:
         is used as the size n of the n-grams
         """
         docnames_list = list(self._docs_dict.keys())
-        ngram_size = self._threshold
+        ngram_size = int(self._threshold)
         min_similarity = 0.2
 
         # create dictionaries with each document as
@@ -304,26 +371,44 @@ class Detector:
 
         # create graph
         doc_graph = Graph(set(docnames_list))
+        if self._file is None:
+            for i, v1 in enumerate(docnames_list):
+                # use ngrams in v1 as corpus for this query
+                # eliminate duplicates
+                wordspace = list(set(docs_dict[v1]))
 
-        for i, v1 in enumerate(docnames_list):
-            # use ngrams in v1 as corpus for this query
-            # eliminate duplicates
-            wordspace = list(set(docs_dict[v1]))
+                # make a dictionary that maps each n-gram in the corpus to its idf
+                idf = self.inverse_document_frequency(wordspace, docs_dict_set_ngrams)
 
-            # make a dictionary that maps each n-gram in the corpus to its idf
-            idf = self.inverse_document_frequency(wordspace, docs_dict_set_ngrams)
+                doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
 
-            doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
+                for j in range(i+1,len(docnames_list)):
+                    v2 = docnames_list[j]
+                    # each vertex is compared only to 
+                    # its subsequent vertices in the list,
+                    # to avoid double-computing
+                    doc2 = self.document_vector(docs_dict[v2], idf, wordspace)
+                    sim = self.cosine_similarity(doc1,doc2)
+                    if sim >= min_similarity:
+                        doc_graph.add_edge((v1,v2), sim)
+        else:
+            v2 = self._file
+            doc_graph.add_vertex(v2)
+            v2ngram = self.break_into_ngrams(self.mainFile, ngram_size)
+            docs_dict_set_ngrams[v2] = set(v2ngram)
+            for i, v1 in enumerate(docnames_list):
+                # use ngrams in v1 as corpus for this query
+                # eliminate duplicates
+                wordspace = list(set(docs_dict[v1]))
 
-            for j in range(i+1,len(docnames_list)):
-                v2 = docnames_list[j]
-                # each vertex is compared only to 
-                # its subsequent vertices in the list,
-                # to avoid double-computing
-                doc2 = self.document_vector(docs_dict[v2], idf, wordspace)
-                sim = self.cosine_similarity(doc1,doc2)
+                # make a dictionary that maps each n-gram in the corpus to its idf
+                idf = self.inverse_document_frequency(wordspace, docs_dict_set_ngrams)
+
+                doc1 = self.document_vector(docs_dict[v1], idf, wordspace)
+                doc2 = self.document_vector(v2ngram, idf, wordspace)
+                sim = self.cosine_similarity(doc1, doc2)
                 if sim >= min_similarity:
-                    doc_graph.add_edge((v1,v2), sim)
+                    doc_graph.add_edge((v1, v2), sim)
 
         # return sorted list of edges, from most in common to least
         return sorted(doc_graph.edges(), key = doc_graph.edges().get, reverse = True)
