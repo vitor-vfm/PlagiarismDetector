@@ -457,7 +457,10 @@ class Detector:
             for doc in words_sets:
                 if ngram in doc:
                     count += 1
-            idf[ngram] = math.log(len(wordspace)/(count + 1))
+            try:
+                idf[ngram] = math.log(len(wordspace)/(count + 1))
+            except:
+                idf[ngram] = 100000000  #  Some large number
 
         return idf
 
