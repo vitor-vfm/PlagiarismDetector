@@ -1,7 +1,7 @@
 # PlagiarismDetector
 Program to detect plagiarism in essays - final project for CMPUT 275
 
-This program is designed to be ran in PyPy instead of the normal Python 3 interpreter.
+This program is designed to run in PyPy instead of the normal Python 3 interpreter.
 The regular python interpreter is just WAY too slow (at least 10 times compared to PyPy),
 which is detrimental to both development and presentation.
 
